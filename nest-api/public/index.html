@@ -586,7 +586,7 @@
       <button class="toggle-sidebar-btn" onclick="toggleSidebar()">☰</button>
       <div class="chat-header-title" id="chatTitle">AI 雨木科技智能对话</div>
       <select class="model-select" id="modelSelect">
-        <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+      
         <option value="deepseek-v4-pro">deepseek-v4-pro</option>
         <option value="deepseek-reasoner">deepseek-reasoner</option>
       </select>
@@ -599,9 +599,9 @@
         <div class="welcome-subtitle">我是你的AI助手，可以回答问题、写代码、创作内容</div>
         <div class="welcome-suggestions">
           <div class="suggestion-card" onclick="useSuggestion('帮我写一个React自定义Hook，用于监听窗口尺寸变化')">帮我写一个React自定义Hook，监听窗口尺寸变化</div>
-          <div class="suggestion-card" onclick="useSuggestion('保温杯 极简风 白色背景 ')">🖼️ 保温杯 极简风 白色背景 </div>
-          <div class="suggestion-card" onclick="useSuggestion('我生成发生祝福语的并制作')">🎬 生成祝福语并制作</div>
-          <div class="suggestion-card" onclick="useSuggestion('小红书 奶茶店营销策划 夏季新品第二杯半价')">📕 小红书奶茶店营销策划</div>
+          <div class="suggestion-card" onclick="useSuggestion('保温杯 极简风 白色背景 电商主图')">🖼️ 保温杯 极简风 白色背景 电商主图 </div>
+          <div class="suggestion-card" onclick="useSuggestion('我生成发生祝福语的并制作视频')">🎬 生成祝福语并制作视频</div>
+          <div class="suggestion-card" onclick="useSuggestion('小红书 奶茶店营销策划 夏季新品第二杯半价方案')">📕 小红书奶茶店营销策划方案</div>
         </div>
       </div>
       <div class="messages-inner" id="messagesInner" style="display:none;"></div>
@@ -805,7 +805,7 @@
         const conv = await res.json();
         currentConvId = conv.id;
         document.getElementById('chatTitle').textContent = conv.title;
-        document.getElementById('modelSelect').value = conv.model || 'deepseek-v4-flash';
+        document.getElementById('modelSelect').value = conv.model || 'qwen/qwen3.5-35b-a3b';
         const inner = document.getElementById('messagesInner');
         inner.innerHTML = '';
         conv.messages.filter(m => m.role !== 'system').forEach(m => appendMessage(m.role, m.content, false));
@@ -1341,7 +1341,6 @@
       `;
 
       footer.innerHTML = `
-        <button class="img-btn img-btn-secondary" onclick="closeImageModal()">关闭</button>
         <button class="img-btn img-btn-primary" onclick="confirmXhsResult()" style="background:#ff2442;">发送到对话</button>
       `;
     }
@@ -1350,21 +1349,27 @@
       closeImageModal();
       showChat();
 
+      // 预设小红书文案
+      const xhsContent = '🧋夏日特惠来啦！第二杯半价，快乐加倍！\n\n炎炎夏日，来一杯冰爽奶茶治愈自己吧~\n现在买一杯，第二杯只要半价！\n快叫上你的闺蜜一起来打卡！\n\n#奶茶店 #夏季特惠 #第二杯半价 #奶茶控';
+      const lines = xhsContent.split('\n').filter(l => l.trim());
+      const xhsTitle = lines[0] || '奶茶店营销策划';
+      const xhsBody = lines.slice(1).join('\n');
+      const tags = xhsContent.match(/#[^\s#]+/g) || [];
+
       // 用户消息
-      appendMessage('user', '小红书 奶茶店营销策划');
+      const userRow = appendMessage('user', '小红书 奶茶店营销策划');
 
-      // AI回复带小红书卡片
-      const aiRow = appendMessage('assistant', '', false);
-      const aiContent = aiRow.querySelector('.message-content');
-
-      aiContent.innerHTML = `
-        <p>已为您生成小红书营销策划卡片 📕</p>
-        <div style="display:flex;justify-content:center;margin:12px 0;">
+      // 在用户消息中插入小红书卡片预览
+      const contentEl = userRow.querySelector('.message-content');
+      const cardEl = document.createElement('div');
+      cardEl.innerHTML = `
+        <div style="display:flex;justify-content:center;margin-top:8px;">
           <div class="xhs-card" style="cursor:pointer;" onclick="window.open('${LOCAL_XHS_IMAGE.url}','_blank')">
             <img class="xhs-card-img" src="${LOCAL_XHS_IMAGE.url}" alt="小红书配图">
             <div class="xhs-card-body">
-              <div class="xhs-card-title">🧋 奶茶店营销策划</div>
-              <div class="xhs-card-desc">点击图片查看大图，如需调整文案请告诉我~</div>
+              <div class="xhs-card-title">${escapeHtml(xhsTitle)}</div>
+              <div class="xhs-card-desc">${escapeHtml(xhsBody)}</div>
+              <div style="margin-top:8px;">${tags.map(t => `<span class="xhs-tag">${escapeHtml(t)}</span>`).join('')}</div>
             </div>
             <div class="xhs-card-footer">
               <div class="xhs-card-author">
@@ -1379,6 +1384,44 @@
           </div>
         </div>
       `;
+      contentEl.insertBefore(cardEl, contentEl.firstChild);
+
+      // AI流式回复
+      const aiRow = appendMessage('assistant', '', true);
+      const aiContent = aiRow.querySelector('.message-content');
+
+      fetch(`${API_BASE}/ai-chat/messages/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer pc-chat' },
+        body: JSON.stringify({
+          content: '我已经生成了一份小红书营销策划卡片，请帮我分析一下这篇文案的优缺点，并给出优化建议',
+          conversationId: currentConvId || undefined,
+          model: document.getElementById('modelSelect').value,
+          stream: true,
+        }),
+      }).then(async res => {
+        if (!res.ok) { aiContent.innerHTML = '📕 小红书营销策划卡片已生成！如需调整文案请告诉我。'; return; }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let full = '', buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'conversation') currentConvId = data.conversationId;
+              else if (data.type === 'delta') { full += data.content; aiContent.innerHTML = renderMarkdown(full); scrollToBottom(); }
+            } catch {}
+          }
+        }
+      }).catch(() => {
+        aiContent.innerHTML = '📕 小红书营销策划卡片已生成！如需调整文案请告诉我。';
+      });
 
       scrollToBottom();
       loadConversations();
